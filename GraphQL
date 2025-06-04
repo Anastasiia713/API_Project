@@ -1,0 +1,274 @@
+const { GraphQLServer } = require('graphql-yoga');
+const axios = require('axios');
+
+#Типы для ресторанов
+type Restaurant {
+  id: ID!
+  name: String!
+  cuisine: String!
+  location: String
+  rating: Float
+  menu: [MenuItem]
+  address: RestaurantAddress
+}
+
+type RestaurantAddress {
+  street: String!
+  houseNumber: String!
+  city: String!
+}
+
+#Типы для элементов меню
+type MenuItem {
+  id: ID!
+  name: String!
+  description: String
+  price: Float
+  imageUrl: String
+  ingredients: [String]
+  isVegetarian: Boolean
+  isVegan: Boolean
+  category: String # добавлена категория
+}
+
+# Типы для заказов
+type Order {
+  id: ID!
+  restaurant: Restaurant
+  items: [OrderItem]
+  total: Float
+  status: OrderStatus! # перечисление статусов
+  deliveryAddress: DeliveryAddress
+  user: User # добавил связь с пользователем
+  courier: Courier # добавил связь с курьером
+}
+enum OrderStatus {
+  placed
+  accepted
+  in_progress
+  delivered
+  cancelled
+}
+
+type OrderItem {
+  item: MenuItem!
+  quantity: Int!
+}
+
+# Типы для адресов
+type DeliveryAddress {
+  street: String!
+  houseNum: String!
+  roomNum: String
+  city: String!
+}
+
+#Типы для пользователей
+type User {
+  id: ID!
+  name: String
+  email: String
+  orders: [Order]
+  addresses: [DeliveryAddress] # добавлена возможность нескольких адресов
+}
+
+
+#Типы для курьеров
+type Courier {
+  id: ID!
+  name: String
+  phone: String
+}
+
+# Типы для отзывов
+type Review {
+  id: ID!
+  user: User!
+  rating: Int!
+  comment: String
+}
+
+type RestaurantReview implements Review {
+    id: ID!
+    user: User!
+    rating: Int!
+    comment: String
+    restaurant: Restaurant!
+}
+
+type CourierReview implements Review {
+    id: ID!
+    user: User!
+    rating: Int!
+    comment: String
+    courier: Courier!
+}
+
+# Корневой тип запросов
+type Query {
+  restaurants(cuisine: String): [Restaurant]
+  restaurant(id: ID!): Restaurant
+  menu(restaurantId: ID!): [MenuItem]
+  order(id: ID!): Order
+  user(id: ID!): User # добавил запрос на получение данных пользователя
+  reviews(restaurantId:ID, courierId:ID):[Review] # запрос на получение отзывов
+}
+const resolvers = {
+  Query: {
+    restaurants: async (_, { cuisine }) => {
+      try {
+        const response = await axios.get(http://restaurant-service/restaurants?cuisine=${cuisine});
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении ресторанов:", error);
+        return []; // Возвращаем пустой массив в случае ошибки
+      }
+    },
+    restaurant: async (_, { id }) => {
+      try {
+        const response = await axios.get(http://restaurant-service/restaurant/${id});
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении ресторана:", error);
+        return null; // Возвращаем null в случае ошибки
+      }
+    },
+    menu: async (_, { restaurantId }) => {
+      try {
+        const response = await axios.get(http://restaurant-service/menu/${restaurantId});
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении меню:", error);
+        return [];
+      }
+    },
+    order: async (_, { id }) => {
+      try {
+        const response = await axios.get(http://order-service/order/${id});
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении заказа:", error);
+        return null;
+      }
+    },
+    user: async (_, { id }) => {
+      try {
+        const response = await axios.get(http://user-service/user/${id});
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении пользователя:", error);
+        return null;
+      }
+    },
+    reviews: async (_, { restaurantId, courierId }) => {
+      try {
+        let url = http://review-service/reviews;
+        const params = new URLSearchParams();
+        if (restaurantId) params.append('restaurantId', restaurantId);
+        if (courierId) params.append('courierId', courierId);
+        url += params.toString() ? ?${params.toString()} : '';
+
+        const response = await axios.get(url);
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении отзывов:", error);
+        return [];
+      }
+    },
+  },
+  Restaurant: {
+    menu: async (parent) => {
+      try {
+        const response = await axios.get(http://restaurant-service/menu/${parent.id});
+        return response.data;
+} catch (error) {
+        console.error("Ошибка при получении меню ресторана:", error);
+        return [];
+      }
+    },
+    address: async (parent) => {
+        try{
+            const response = await axios.get(http://restaurant-service/address/${parent.id});
+            return response.data;
+        } catch(error){
+            console.error("Ошибка при получении адреса ресторана:", error)
+            return null;
+        }
+    }
+  },
+  Order: {
+    restaurant: async (parent) => {
+      try {
+        const response = await axios.get(http://restaurant-service/restaurant/${parent.restaurant.id});
+        return response.data;
+      } catch (error) {
+        console.error("Ошибка при получении ресторана заказа:", error);
+        return null;
+      }
+    },
+    user: async (parent) => {
+        try{
+            const response = await axios.get(http://user-service/user/${parent.user.id});
+            return response.data;
+        } catch (error){
+            console.error("Ошибка при получении пользователя заказа:", error);
+            return null;
+        }
+    },
+    courier: async (parent) => {
+        if(!parent.courier){
+            return null;
+        }
+        try{
+            const response = await axios.get(http://courier-service/courier/${parent.courier.id});
+            return response.data;
+        } catch (error){
+            console.error("Ошибка при получении курьера заказа:", error);
+            return null;
+        }
+    },
+    items: (parent) => parent.items,
+    deliveryAddress: (parent) => parent.deliveryAddress,
+  },
+    Review: {
+        user: async (parent) => {
+            try {
+                const response = await axios.get(http://user-service/user/${parent.user.id});
+                return response.data;
+              } catch (error) {
+                console.error("Ошибка при получении пользователя отзыва:", error);
+                return null;
+              }
+        },
+    },
+    RestaurantReview: {
+        restaurant: async (parent) => {
+            try{
+                const response = await axios.get(http://restaurant-service/restaurant/${parent.restaurant.id});
+                return response.data;
+            } catch (error){
+                console.error("Ошибка при получении ресторана отзыва:", error);
+                return null;
+            }
+        }
+    },
+    CourierReview: {
+        courier: async (parent) => {
+            try{
+                const response = await axios.get(http://courier-service/courier/${parent.courier.id});
+                return response.data;
+            } catch (error){
+                console.error("Ошибка при получении курьера отзыва:", error);
+                return null;
+            }
+        }
+    }
+};
+
+const server = new GraphQLServer({
+  typeDefs,
+  resolvers,
+});
+
+server.start(() => console.log('Server is running on http://localhost:4000'));
+`
